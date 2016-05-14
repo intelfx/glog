@@ -399,6 +399,10 @@ if (gflags_FOUND)
   endif (NOT BUILD_SHARED_LIBS)
 endif (gflags_FOUND)
 
+if (ANDROID)
+  target_link_libraries (glog PUBLIC log)
+endif (ANDROID)
+
 set_target_properties (glog PROPERTIES VERSION ${GLOG_MAJOR_VERSION})
 set_target_properties (glog PROPERTIES SOVERSION ${GLOG_VERSION})
 

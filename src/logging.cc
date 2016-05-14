@@ -67,6 +67,10 @@
 # include "stacktrace.h"
 #endif
 
+#ifdef ANDROID
+# include <android/log.h>
+#endif  // ANDROID
+
 using std::string;
 using std::vector;
 using std::setw;
@@ -120,6 +124,11 @@ static const int64 kPageSize = getpagesize();
 }
 _END_GOOGLE_NAMESPACE_
 #endif
+
+#ifdef ANDROID
+GLOG_DEFINE_bool(android_logcat_redirect, false, "Redirect stderr to Android logcat");
+GLOG_DEFINE_string(android_logcat_tag, "native", "Tag to use with Android logcat");
+#endif  // ANDROID
 
 // By default, errors (including fatal errors) get logged to stderr as
 // well as the file.
@@ -676,6 +685,30 @@ inline void LogDestination::SetEmailLogging(LogSeverity min_severity,
 
 static void ColoredWriteToStderr(LogSeverity severity,
                                  const char* message, size_t len) {
+#ifdef ANDROID
+  if (!FLAGS_android_logcat_redirect) {
+    fwrite(message, len, 1, stderr);
+  } else {
+    static const int android_log_levels[] = {
+      ANDROID_LOG_INFO,     // GLOG_INFO
+      ANDROID_LOG_WARN,     // GLOG_WARNING
+      ANDROID_LOG_ERROR,    // GLOG_ERROR
+      ANDROID_LOG_FATAL,    // GLOG_FATAL
+    };
+
+    // Output the log string the Android log at the appropriate level.
+    __android_log_write(android_log_levels[severity],
+                        FLAGS_android_logcat_tag.c_str(),
+                        string(message, len).c_str());
+
+    // Indicate termination if needed.
+    if (severity == GLOG_FATAL) {
+      __android_log_write(ANDROID_LOG_FATAL,
+                          FLAGS_android_logcat_tag.c_str(),
+                          "terminating.\n");
+    }
+  }
+#else
   const GLogColor color =
       (LogDestination::terminal_supports_color() && FLAGS_colorlogtostderr) ?
       SeverityToColor(severity) : COLOR_DEFAULT;
@@ -709,6 +742,7 @@ static void ColoredWriteToStderr(LogSeverity severity,
   fwrite(message, len, 1, stderr);
   fprintf(stderr, "\033[m");  // Resets the terminal to default.
 #endif  // OS_WINDOWS
+#endif  // ANDROID
 }
 
 static void WriteToStderr(const char* message, size_t len) {
